@@ -81,4 +81,7 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.coil.compose)
+  implementation(libs.media3.exoplayer)
+  implementation(libs.media3.exoplayer.hls)
+  implementation(libs.media3.ui)
 }

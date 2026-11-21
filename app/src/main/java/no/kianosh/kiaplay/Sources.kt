@@ -113,25 +113,34 @@ object AppSource {
   }
 }
 
-/** Starts playback: an external player at the saved position, or the Jellyfin app. */
+/** Starts playback in Kiaplay's own player, an external player, or the Jellyfin app. */
 object Playback {
   const val JELLYFIN_TV = "org.jellyfin.androidtv"
 
-  fun play(context: Context, prefs: Prefs, jellyfin: Jellyfin, item: MediaItem, fromStart: Boolean) {
-    if (prefs.player == Player.EXTERNAL) {
-      val positionMs = if (fromStart) 0L else item.positionTicks / 10_000L
-      val intent = Intent(Intent.ACTION_VIEW)
-        .setDataAndType(Uri.parse(jellyfin.streamUrl(item)), "video/*")
-        .putExtra("title", item.name)
-        .putExtra("position", positionMs)
-        .putExtra("from_start", fromStart)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      if (intent.resolveActivity(context.packageManager) != null) {
-        runCatching { context.startActivity(intent) }
-        return
+  fun play(context: Context, state: AppState, item: MediaItem, fromStart: Boolean) =
+    playQueue(context, state, listOf(item), 0, fromStart)
+
+  fun playQueue(context: Context, state: AppState, queue: List<MediaItem>, index: Int, fromStart: Boolean) {
+    val prefs = state.prefs
+    val item = queue[index]
+    when (prefs.player) {
+      Player.INTERNAL -> state.playRequest = PlayRequest(queue, index, fromStart)
+      Player.EXTERNAL -> {
+        val positionMs = if (fromStart) 0L else item.positionTicks / 10_000L
+        val intent = Intent(Intent.ACTION_VIEW)
+          .setDataAndType(Uri.parse(state.jellyfin.streamUrl(item)), if (item.type == "Audio") "audio/*" else "video/*")
+          .putExtra("title", item.name)
+          .putExtra("position", positionMs)
+          .putExtra("from_start", fromStart)
+          .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (intent.resolveActivity(context.packageManager) != null) {
+          runCatching { context.startActivity(intent) }
+        } else {
+          state.playRequest = PlayRequest(queue, index, fromStart)
+        }
       }
+      Player.JELLYFIN -> AppSource.launch(context, JELLYFIN_TV)
     }
-    AppSource.launch(context, JELLYFIN_TV)
   }
 }
 

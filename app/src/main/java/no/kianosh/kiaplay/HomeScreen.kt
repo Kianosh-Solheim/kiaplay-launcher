@@ -124,7 +124,7 @@ fun HomeScreen(state: AppState, onOpen: (MediaItem) -> Unit, onTab: (Tab) -> Uni
             KpButton(
               "▶ SPILL AV",
               prefs.accent,
-              { Playback.play(context, prefs, state.jellyfin, item, fromStart = false) },
+              { Playback.play(context, state, item, fromStart = false) },
               Modifier.focusRequester(playFocus),
               primary = true,
             )

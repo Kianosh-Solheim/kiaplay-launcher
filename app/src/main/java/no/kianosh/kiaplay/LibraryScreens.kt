@@ -60,6 +60,7 @@ fun ChipRow(options: List<String>, selected: String, accent: androidx.compose.ui
 fun LibraryScreen(state: AppState, tab: Tab, onOpen: (MediaItem) -> Unit, onTab: (Tab) -> Unit, onMenu: () -> Unit) {
   val prefs = state.prefs
   val context = LocalContext.current
+  val scope = rememberCoroutineScope()
   val all = if (tab == Tab.MUSIC) state.music else state.films
   var genre by remember(tab) { mutableStateOf("ALLE") }
   var sort by remember(tab) { mutableStateOf("A–Å") }
@@ -102,7 +103,14 @@ fun LibraryScreen(state: AppState, tab: Tab, onOpen: (MediaItem) -> Unit, onTab:
     ) {
       items(list, key = { it.id }) { item ->
         Focusable(onClick = {
-          if (music) AppSource.launch(context, Playback.JELLYFIN_TV) else onOpen(item)
+          if (music) {
+            scope.launch {
+              val tracks = runCatching { state.jellyfin.tracks(item.id) }.getOrDefault(emptyList())
+              if (tracks.isNotEmpty()) Playback.playQueue(context, state, tracks, 0, fromStart = true)
+            }
+          } else {
+            onOpen(item)
+          }
         }) { focused ->
           Cover(
             item.name,
@@ -117,7 +125,7 @@ fun LibraryScreen(state: AppState, tab: Tab, onOpen: (MediaItem) -> Unit, onTab:
         }
       }
     }
-    FooterHint("◀ ▶ ▲ ▼ NAVIGER   OK DETALJER", "JELLYFIN · ${state.status}")
+    FooterHint(if (music) "◀ ▶ ▲ ▼ NAVIGER   OK SPILL ALBUMET" else "◀ ▶ ▲ ▼ NAVIGER   OK DETALJER", "JELLYFIN · ${state.status}")
   }
 }
 
@@ -184,7 +192,7 @@ fun SeriesScreen(state: AppState, initial: MediaItem?, onOpen: (MediaItem) -> Un
               KpButton(
                 "▶ ${if (next.playedPercent > 0f) "FORTSETT" else "SPILL AV"} S${next.season ?: 1} E${next.episode ?: 1}",
                 prefs.accent,
-                { Playback.play(context, prefs, state.jellyfin, next, fromStart = false) },
+                { Playback.playQueue(context, state, episodes, episodes.indexOf(next), fromStart = false) },
                 primary = true,
               )
             }

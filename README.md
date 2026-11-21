@@ -28,7 +28,11 @@ A retro, 80s-style home screen for **Chromecast with Google TV**. Black backgrou
 
 ## Playback
 
-"Spill av" sends the film to an external player such as VLC, starting where you left off. If no player is installed, or "Jellyfin-appen" is chosen in the settings, the Jellyfin app opens instead. Progress made in an external player is not reported back to Jellyfin.
+Kiaplay has its own player. It plays straight from Jellyfin, resumes where you left off, and reports progress back, so "keep watching" and watched status stay right in Jellyfin and its other apps. Files the TV can't decode are transcoded by the server automatically. Series play on into the next episode, and albums play as a queue.
+
+Remote: **OK** pause/play, **◀ / ▶** back 10 s / forward 30 s, **▲ / ▼** show the progress bar, **Back** stop.
+
+In the settings you can choose an external player (VLC etc.) or the Jellyfin app instead.
 
 ## Building
 

@@ -9,7 +9,7 @@ import java.util.UUID
 
 enum class IntroMode(val label: String) { TV_ON("Hver gang TV-en slås på"), BOOT("Bare ved omstart"), OFF("Av") }
 
-enum class Player(val label: String) { EXTERNAL("Ekstern spiller (VLC o.l.)"), JELLYFIN("Jellyfin-appen") }
+enum class Player(val label: String) { INTERNAL("Kiaplay-spiller"), EXTERNAL("Ekstern (VLC o.l.)"), JELLYFIN("Jellyfin-appen") }
 
 data class City(val name: String, val lat: Double, val lon: Double)
 
@@ -43,7 +43,7 @@ class Prefs(context: Context) {
     private set
   var cityIndex by mutableStateOf(sp.getInt("city", 0).coerceIn(0, cities.size - 1))
     private set
-  var player by mutableStateOf(Player.entries[sp.getInt("player", 0).coerceIn(0, 1)])
+  var player by mutableStateOf(Player.entries[sp.getInt("player2", 0).coerceIn(0, 2)])
     private set
   var favorites by mutableStateOf(sp.getStringSet("favorites", null)?.toSet())
     private set
@@ -74,7 +74,7 @@ class Prefs(context: Context) {
   fun updateCrt(v: Boolean) { crt = v; sp.edit().putBoolean("crt", v).apply() }
   fun updateAccent(i: Int) { accentIndex = i; sp.edit().putInt("accent", i).apply() }
   fun updateCity(i: Int) { cityIndex = i; sp.edit().putInt("city", i).apply() }
-  fun updatePlayer(v: Player) { player = v; sp.edit().putInt("player", v.ordinal).apply() }
+  fun updatePlayer(v: Player) { player = v; sp.edit().putInt("player2", v.ordinal).apply() }
 
   /** Favourite app packages; null until the user changes them (then the first apps are used). */
   fun updateFavorites(v: Set<String>) { favorites = v; sp.edit().putStringSet("favorites", v).apply() }

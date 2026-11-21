@@ -149,7 +149,19 @@ fun KiaplayApp(state: AppState, introAtStart: Boolean, screenOnTick: Int, homeTi
     if (item.type == "Series") go(Nav.Series(item)) else go(Nav.Detail(item))
   }
 
-  BackHandler(enabled = !intro && (menu || stack.size > 1)) { back() }
+  BackHandler(enabled = !intro && state.playRequest == null && (menu || stack.size > 1)) { back() }
+
+  val play = state.playRequest
+  if (play != null) {
+    PlayerScreen(state, play) {
+      state.playRequest = null
+      scope.launch {
+        delay(800)
+        state.refreshMedia()
+      }
+    }
+    return
+  }
 
   DesignSurface {
     val shape = if (prefs.crt) RoundedCornerShape(54.dp) else RoundedCornerShape(0.dp)

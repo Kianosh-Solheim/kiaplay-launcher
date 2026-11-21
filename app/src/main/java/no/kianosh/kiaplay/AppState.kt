@@ -17,6 +17,7 @@ class AppState(context: Context) {
   var apps by mutableStateOf<List<AppEntry>>(emptyList())
   var weather by mutableStateOf<Weather?>(null)
   var status by mutableStateOf("KOBLER TIL …")
+  var playRequest by mutableStateOf<PlayRequest?>(null)
 
   fun favoriteApps(): List<AppEntry> {
     val favs = prefs.favorites

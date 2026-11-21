@@ -28,6 +28,9 @@ data class MediaItem(
   val hasPrimary: Boolean,
   val backdropItemId: String?,
   val childCount: Int?,
+  val artist: String? = null,
+  val album: String? = null,
+  val albumId: String? = null,
 ) {
   val minutesLeft: Int?
     get() = runTimeMinutes?.let { ((it * (100f - playedPercent)) / 100f).toInt().coerceAtLeast(1) }
@@ -120,6 +123,10 @@ class Jellyfin(private val prefs: Prefs) {
       hasPrimary = tags?.has("Primary") == true,
       backdropItemId = backdropId,
       childCount = if (o.has("ChildCount")) o.optInt("ChildCount") else null,
+      artist = o.optString("AlbumArtist").ifBlank { null }
+        ?: o.optJSONArray("Artists")?.let { a -> if (a.length() > 0) a.getString(0) else null },
+      album = o.optString("Album").ifBlank { null },
+      albumId = o.optString("AlbumId").ifBlank { null },
     )
   }
 
@@ -172,12 +179,58 @@ class Jellyfin(private val prefs: Prefs) {
     Unit
   }
 
-  fun posterUrl(item: MediaItem, height: Int = 420): String? =
-    if (item.hasPrimary) "${prefs.server}/Items/${item.id}/Images/Primary?maxHeight=$height&quality=85" else null
+  fun posterUrl(item: MediaItem, height: Int = 420): String? = when {
+    item.hasPrimary -> "${prefs.server}/Items/${item.id}/Images/Primary?maxHeight=$height&quality=85"
+    item.albumId != null -> "${prefs.server}/Items/${item.albumId}/Images/Primary?maxHeight=$height&quality=85"
+    else -> null
+  }
 
   fun backdropUrl(item: MediaItem): String? =
     item.backdropItemId?.let { "${prefs.server}/Items/$it/Images/Backdrop/0?maxWidth=1280&quality=80" }
 
   fun streamUrl(item: MediaItem): String =
-    "${prefs.server}/Videos/${item.id}/stream?static=true&api_key=${prefs.token}"
+    "${prefs.server}/${if (item.type == "Audio") "Audio" else "Videos"}/${item.id}/stream?static=true&MediaSourceId=${item.id}&api_key=${prefs.token}"
+
+  /** HLS stream the server transcodes to H.264/AAC, used when the file can't be played directly. */
+  fun transcodeUrl(item: MediaItem, playSessionId: String): String =
+    "${prefs.server}/Videos/${item.id}/master.m3u8?MediaSourceId=${item.id}&PlaySessionId=$playSessionId" +
+      "&DeviceId=${enc(prefs.deviceId)}&VideoCodec=h264&AudioCodec=aac,ac3,eac3&MaxAudioChannels=6" +
+      "&TranscodingMaxAudioChannels=6&SegmentContainer=ts&MinSegments=1&BreakOnNonKeyFrames=True" +
+      "&VideoBitrate=20000000&AudioBitrate=384000&api_key=${prefs.token}"
+
+  suspend fun tracks(albumId: String): List<MediaItem> = withContext(Dispatchers.IO) {
+    items(
+      request(
+        "/Items?userId=${enc(prefs.userId)}&ParentId=${enc(albumId)}&IncludeItemTypes=Audio&Recursive=true" +
+          "&SortBy=ParentIndexNumber,IndexNumber,SortName&Fields=$fields",
+      ),
+    )
+  }
+
+  private fun playbackBody(item: MediaItem, positionMs: Long, sessionId: String, transcoding: Boolean, paused: Boolean) =
+    JSONObject()
+      .put("ItemId", item.id)
+      .put("MediaSourceId", item.id)
+      .put("PlaySessionId", sessionId)
+      .put("PositionTicks", positionMs * 10_000L)
+      .put("IsPaused", paused)
+      .put("CanSeek", true)
+      .put("PlayMethod", if (transcoding) "Transcode" else "DirectPlay")
+
+  /** Tells Jellyfin what is playing, so "keep watching" and played status stay right. */
+  suspend fun reportStart(item: MediaItem, positionMs: Long, sessionId: String, transcoding: Boolean) = withContext(Dispatchers.IO) {
+    request("/Sessions/Playing", "POST", playbackBody(item, positionMs, sessionId, transcoding, false))
+    Unit
+  }
+
+  suspend fun reportProgress(item: MediaItem, positionMs: Long, sessionId: String, transcoding: Boolean, paused: Boolean) =
+    withContext(Dispatchers.IO) {
+      request("/Sessions/Playing/Progress", "POST", playbackBody(item, positionMs, sessionId, transcoding, paused))
+      Unit
+    }
+
+  suspend fun reportStopped(item: MediaItem, positionMs: Long, sessionId: String, transcoding: Boolean) = withContext(Dispatchers.IO) {
+    request("/Sessions/Playing/Stopped", "POST", playbackBody(item, positionMs, sessionId, transcoding, false))
+    Unit
+  }
 }

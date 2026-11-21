@@ -74,14 +74,14 @@ fun DetailScreen(state: AppState, item: MediaItem, onBack: () -> Unit) {
         KpButton(
           if (inProgress) "▶ FORTSETT" else "▶ SPILL AV",
           prefs.accent,
-          { Playback.play(context, prefs, state.jellyfin, item, fromStart = !inProgress) },
+          { Playback.play(context, state, item, fromStart = !inProgress) },
           Modifier.focusRequester(playFocus),
           primary = true,
           height = 54.dp,
           fontSize = 24,
         )
         if (inProgress) {
-          KpButton("↺ START PÅ NYTT", prefs.accent, { Playback.play(context, prefs, state.jellyfin, item, fromStart = true) }, height = 54.dp)
+          KpButton("↺ START PÅ NYTT", prefs.accent, { Playback.play(context, state, item, fromStart = true) }, height = 54.dp)
         }
         KpButton(if (favorite) "★ FAVORITT" else "☆ FAVORITT", prefs.accent, {
           favorite = !favorite
@@ -107,7 +107,7 @@ fun DetailScreen(state: AppState, item: MediaItem, onBack: () -> Unit) {
       Spacer(Modifier.weight(1f))
       FooterHint(
         "OK SPILL AV   ◀ TILBAKE",
-        if (prefs.player == Player.EXTERNAL) "AVSPILLER: EKSTERN" else "AVSPILLER: JELLYFIN",
+        "AVSPILLER: ${prefs.player.label.uppercase()}",
       )
     }
   }
