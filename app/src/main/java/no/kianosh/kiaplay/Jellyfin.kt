@@ -67,8 +67,8 @@ class Jellyfin(private val prefs: Prefs) {
   /** Logs in and stores the access token. Returns an error message, or null on success. */
   suspend fun login(server: String, user: String, password: String): String? = withContext(Dispatchers.IO) {
     try {
-      prefs.setServer(if (server.startsWith("http")) server else "http://$server")
-      prefs.setUserName(user)
+      prefs.updateServer(if (server.startsWith("http")) server else "http://$server")
+      prefs.updateUserName(user)
       val res = JSONObject(
         request(
           "/Users/AuthenticateByName",
@@ -77,7 +77,7 @@ class Jellyfin(private val prefs: Prefs) {
           token = null,
         ),
       )
-      prefs.setSession(res.getString("AccessToken"), res.getJSONObject("User").getString("Id"))
+      prefs.updateSession(res.getString("AccessToken"), res.getJSONObject("User").getString("Id"))
       null
     } catch (e: Exception) {
       e.message ?: "Kunne ikke logge inn"

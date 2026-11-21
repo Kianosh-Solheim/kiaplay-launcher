@@ -65,23 +65,23 @@ class Prefs(context: Context) {
   val city: City get() = cities[cityIndex]
   val loggedIn: Boolean get() = server.isNotBlank() && token.isNotBlank() && userId.isNotBlank()
 
-  fun setIntroMode(v: IntroMode) { introMode = v; sp.edit().putInt("introMode", v.ordinal).apply() }
-  fun setIntroShort(v: Boolean) { introShort = v; sp.edit().putBoolean("introShort", v).apply() }
-  fun setSkipOnKey(v: Boolean) { skipOnKey = v; sp.edit().putBoolean("skipOnKey", v).apply() }
-  fun setIntroSound(v: Boolean) { introSound = v; sp.edit().putBoolean("introSound", v).apply() }
-  fun setVolume(v: Int) { volume = v.coerceIn(0, 10); sp.edit().putInt("volume", volume).apply() }
-  fun setScanlines(v: Boolean) { scanlines = v; sp.edit().putBoolean("scanlines", v).apply() }
-  fun setCrt(v: Boolean) { crt = v; sp.edit().putBoolean("crt", v).apply() }
-  fun setAccent(i: Int) { accentIndex = i; sp.edit().putInt("accent", i).apply() }
-  fun setCity(i: Int) { cityIndex = i; sp.edit().putInt("city", i).apply() }
-  fun setPlayer(v: Player) { player = v; sp.edit().putInt("player", v.ordinal).apply() }
+  fun updateIntroMode(v: IntroMode) { introMode = v; sp.edit().putInt("introMode", v.ordinal).apply() }
+  fun updateIntroShort(v: Boolean) { introShort = v; sp.edit().putBoolean("introShort", v).apply() }
+  fun updateSkipOnKey(v: Boolean) { skipOnKey = v; sp.edit().putBoolean("skipOnKey", v).apply() }
+  fun updateIntroSound(v: Boolean) { introSound = v; sp.edit().putBoolean("introSound", v).apply() }
+  fun updateVolume(v: Int) { volume = v.coerceIn(0, 10); sp.edit().putInt("volume", volume).apply() }
+  fun updateScanlines(v: Boolean) { scanlines = v; sp.edit().putBoolean("scanlines", v).apply() }
+  fun updateCrt(v: Boolean) { crt = v; sp.edit().putBoolean("crt", v).apply() }
+  fun updateAccent(i: Int) { accentIndex = i; sp.edit().putInt("accent", i).apply() }
+  fun updateCity(i: Int) { cityIndex = i; sp.edit().putInt("city", i).apply() }
+  fun updatePlayer(v: Player) { player = v; sp.edit().putInt("player", v.ordinal).apply() }
 
   /** Favourite app packages; null until the user changes them (then the first apps are used). */
-  fun setFavorites(v: Set<String>) { favorites = v; sp.edit().putStringSet("favorites", v).apply() }
+  fun updateFavorites(v: Set<String>) { favorites = v; sp.edit().putStringSet("favorites", v).apply() }
 
-  fun setServer(v: String) { server = v.trim().trimEnd('/'); sp.edit().putString("server", server).apply() }
-  fun setUserName(v: String) { userName = v; sp.edit().putString("userName", v).apply() }
-  fun setSession(token: String, userId: String) {
+  fun updateServer(v: String) { server = v.trim().trimEnd('/'); sp.edit().putString("server", server).apply() }
+  fun updateUserName(v: String) { userName = v; sp.edit().putString("userName", v).apply() }
+  fun updateSession(token: String, userId: String) {
     this.token = token
     this.userId = userId
     sp.edit().putString("token", token).putString("userId", userId).apply()

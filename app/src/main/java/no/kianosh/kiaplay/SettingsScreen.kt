@@ -126,25 +126,25 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onPreviewIntro: () -> Un
         Heading("OPPSTART")
         Txt("Spill av animasjon", Kp.vt(24.sp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          for (m in IntroMode.entries) KpButton(m.label, prefs.accent, { prefs.setIntroMode(m) }, active = prefs.introMode == m, height = 44.dp, fontSize = 18)
+          for (m in IntroMode.entries) KpButton(m.label, prefs.accent, { prefs.updateIntroMode(m) }, active = prefs.introMode == m, height = 44.dp, fontSize = 18)
         }
         Txt("Lengde", Kp.vt(24.sp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          KpButton("FULL · 6 S", prefs.accent, { prefs.setIntroShort(false) }, active = !prefs.introShort, height = 44.dp, fontSize = 18)
-          KpButton("KORT · 2 S", prefs.accent, { prefs.setIntroShort(true) }, active = prefs.introShort, height = 44.dp, fontSize = 18)
+          KpButton("FULL · 6 S", prefs.accent, { prefs.updateIntroShort(false) }, active = !prefs.introShort, height = 44.dp, fontSize = 18)
+          KpButton("KORT · 2 S", prefs.accent, { prefs.updateIntroShort(true) }, active = prefs.introShort, height = 44.dp, fontSize = 18)
           KpButton("▶ FORHÅNDSVIS", prefs.accent, onPreviewIntro, height = 44.dp, fontSize = 18)
         }
-        ToggleRow("Hopp over med hvilken som helst knapp", prefs.skipOnKey, prefs.accent) { prefs.setSkipOnKey(!prefs.skipOnKey) }
+        ToggleRow("Hopp over med hvilken som helst knapp", prefs.skipOnKey, prefs.accent) { prefs.updateSkipOnKey(!prefs.skipOnKey) }
 
         Heading("LYD")
-        ToggleRow("Oppstartslyd (dunk, summing, akkord)", prefs.introSound, prefs.accent) { prefs.setIntroSound(!prefs.introSound) }
+        ToggleRow("Oppstartslyd (dunk, summing, akkord)", prefs.introSound, prefs.accent) { prefs.updateIntroSound(!prefs.introSound) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
           Txt("Volum", Kp.vt(24.sp), Modifier.width(80.dp))
-          KpButton("−", prefs.accent, { prefs.setVolume(prefs.volume - 1) }, height = 40.dp)
+          KpButton("−", prefs.accent, { prefs.updateVolume(prefs.volume - 1) }, height = 40.dp)
           Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             for (i in 0 until 10) Box(Modifier.size(12.dp, 22.dp).background(if (i < prefs.volume) Kp.Teal else Kp.Border))
           }
-          KpButton("+", prefs.accent, { prefs.setVolume(prefs.volume + 1) }, height = 40.dp)
+          KpButton("+", prefs.accent, { prefs.updateVolume(prefs.volume + 1) }, height = 40.dp)
           Txt("${prefs.volume * 10} %", Kp.vt(24.sp, Kp.Teal))
         }
 
@@ -152,7 +152,7 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onPreviewIntro: () -> Un
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
           Txt("Aksentfarge", Kp.vt(24.sp), Modifier.width(160.dp))
           Kp.accents.forEachIndexed { i, c ->
-            Focusable(onClick = { prefs.setAccent(i) }) { focused ->
+            Focusable(onClick = { prefs.updateAccent(i) }) { focused ->
               Box(
                 Modifier
                   .size(if (focused) 40.dp else 34.dp)
@@ -165,8 +165,8 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onPreviewIntro: () -> Un
             }
           }
         }
-        ToggleRow("Skannelinjer (gammelt bilderør)", prefs.scanlines, prefs.accent) { prefs.setScanlines(!prefs.scanlines) }
-        ToggleRow("Buede hjørner og filmkorn", prefs.crt, prefs.accent) { prefs.setCrt(!prefs.crt) }
+        ToggleRow("Skannelinjer (gammelt bilderør)", prefs.scanlines, prefs.accent) { prefs.updateScanlines(!prefs.scanlines) }
+        ToggleRow("Buede hjørner og filmkorn", prefs.crt, prefs.accent) { prefs.updateCrt(!prefs.crt) }
       }
 
       Column(
@@ -193,14 +193,14 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onPreviewIntro: () -> Un
         }
         Txt("Avspiller", Kp.vt(24.sp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          for (p in Player.entries) KpButton(p.label, prefs.accent, { prefs.setPlayer(p) }, active = prefs.player == p, height = 44.dp, fontSize = 18)
+          for (p in Player.entries) KpButton(p.label, prefs.accent, { prefs.updatePlayer(p) }, active = prefs.player == p, height = 44.dp, fontSize = 18)
         }
 
         Heading("VÆRET")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           cities.forEachIndexed { i, c ->
             KpButton(c.name, prefs.accent, {
-              prefs.setCity(i)
+              prefs.updateCity(i)
               scope.launch { state.refreshWeather() }
             }, active = prefs.cityIndex == i, height = 40.dp, fontSize = 16)
           }

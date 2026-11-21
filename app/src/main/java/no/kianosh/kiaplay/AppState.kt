@@ -25,7 +25,7 @@ class AppState(context: Context) {
 
   fun toggleFavoriteApp(pkg: String) {
     val current = prefs.favorites ?: favoriteApps().map { it.packageName }.toSet()
-    prefs.setFavorites(if (pkg in current) current - pkg else current + pkg)
+    prefs.updateFavorites(if (pkg in current) current - pkg else current + pkg)
   }
 
   suspend fun refreshApps(context: Context) {
