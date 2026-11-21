@@ -32,6 +32,6 @@ A retro, 80s-style home screen for **Chromecast with Google TV**. Black backgrou
 
 ## Building
 
-GitHub Actions builds a release APK on every push to `main`. Signed releases need these repository secrets: `KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_PASSWORD`, `KEY_ALIAS`. Without them the build still runs, but only uploads an unsigned-for-release artifact.
+GitHub Actions builds a release APK on every push to `main`. Signed releases need these repository secrets: `KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_PASSWORD`, `KEY_ALIAS`. Without them the build still runs, but the APK is signed with a throwaway debug key and is only uploaded as an Actions artifact, not as a release.
 
 Fonts: Anton and VT323, both under the SIL Open Font License.
