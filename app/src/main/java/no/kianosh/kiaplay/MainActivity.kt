@@ -165,7 +165,7 @@ fun KiaplayApp(state: AppState, introAtStart: Boolean, screenOnTick: Int, homeTi
 
   DesignSurface {
     val shape = if (prefs.crt) RoundedCornerShape(54.dp) else RoundedCornerShape(0.dp)
-    Box(Modifier.fillMaxSize().clip(shape).background(Kp.Black)) {
+    Box(Modifier.fillMaxSize().crtCurve(prefs.curvature).clip(shape).background(Kp.Black)) {
       if (!intro) {
         when (val screen = stack.last()) {
           Nav.Home -> HomeScreen(state, ::open, ::tab, { menu = true }, { go(Nav.Settings) })

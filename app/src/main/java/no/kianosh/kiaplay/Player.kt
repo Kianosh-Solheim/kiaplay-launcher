@@ -366,8 +366,10 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
     DesignSurface {
       Box(Modifier.fillMaxSize()) {
         if (isAudio) {
-          NowPlaying(state, request.queue, index)
-          CrtOverlay(prefs.scanlines, prefs.crt)
+          Box(Modifier.fillMaxSize().crtCurve(prefs.curvature).background(Color.Black)) {
+            NowPlaying(state, request.queue, index)
+            CrtOverlay(prefs.scanlines, prefs.crt)
+          }
         }
 
         // VCR-style on-screen display.

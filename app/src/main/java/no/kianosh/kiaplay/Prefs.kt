@@ -49,6 +49,8 @@ class Prefs(context: Context) {
     private set
   var player by mutableStateOf(Player.entries[sp.getInt("player2", 0).coerceIn(0, 2)])
     private set
+  var curvature by mutableStateOf(Curvature.entries[sp.getInt("curvature", 0).coerceIn(0, 2)])
+    private set
   var subLang by mutableStateOf(SubLang.entries[sp.getInt("subLang", 0).coerceIn(0, 2)])
     private set
   var audioLang by mutableStateOf(AudioLang.entries[sp.getInt("audioLang", 0).coerceIn(0, 2)])
@@ -84,6 +86,7 @@ class Prefs(context: Context) {
   fun updateCity(i: Int) { cityIndex = i; sp.edit().putInt("city", i).apply() }
   fun updatePlayer(v: Player) { player = v; sp.edit().putInt("player2", v.ordinal).apply() }
 
+  fun updateCurvature(v: Curvature) { curvature = v; sp.edit().putInt("curvature", v.ordinal).apply() }
   fun updateSubLang(v: SubLang) { subLang = v; sp.edit().putInt("subLang", v.ordinal).apply() }
   fun updateAudioLang(v: AudioLang) { audioLang = v; sp.edit().putInt("audioLang", v.ordinal).apply() }
 

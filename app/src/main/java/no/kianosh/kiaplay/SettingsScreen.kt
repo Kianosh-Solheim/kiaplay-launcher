@@ -167,6 +167,16 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onPreviewIntro: () -> Un
         }
         ToggleRow("Skannelinjer (gammelt bilderør)", prefs.scanlines, prefs.accent) { prefs.updateScanlines(!prefs.scanlines) }
         ToggleRow("Buede hjørner og filmkorn", prefs.crt, prefs.accent) { prefs.updateCrt(!prefs.crt) }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          Txt("Buet skjerm", Kp.vt(24.sp), Modifier.width(160.dp))
+          if (curveSupported) {
+            for (c in Curvature.entries) {
+              KpButton(c.label, prefs.accent, { prefs.updateCurvature(c) }, active = prefs.curvature == c, height = 40.dp, fontSize = 18)
+            }
+          } else {
+            Txt("Krever Android 13 eller nyere", Kp.vt(22.sp, Kp.Muted))
+          }
+        }
       }
 
       Column(
