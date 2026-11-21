@@ -196,6 +196,15 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onPreviewIntro: () -> Un
           for (p in Player.entries) KpButton(p.label, prefs.accent, { prefs.updatePlayer(p) }, active = prefs.player == p, height = 44.dp, fontSize = 18)
         }
 
+        Txt("Lydspråk", Kp.vt(24.sp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          for (l in AudioLang.entries) KpButton(l.label, prefs.accent, { prefs.updateAudioLang(l) }, active = prefs.audioLang == l, height = 40.dp, fontSize = 18)
+        }
+        Txt("Undertekster", Kp.vt(24.sp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          for (l in SubLang.entries) KpButton(l.label, prefs.accent, { prefs.updateSubLang(l) }, active = prefs.subLang == l, height = 40.dp, fontSize = 18)
+        }
+
         Heading("VÆRET")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           cities.forEachIndexed { i, c ->

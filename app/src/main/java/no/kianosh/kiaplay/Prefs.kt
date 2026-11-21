@@ -11,6 +11,10 @@ enum class IntroMode(val label: String) { TV_ON("Hver gang TV-en slås på"), BO
 
 enum class Player(val label: String) { INTERNAL("Kiaplay-spiller"), EXTERNAL("Ekstern (VLC o.l.)"), JELLYFIN("Jellyfin-appen") }
 
+enum class SubLang(val label: String) { OFF("AV"), NO("NORSK"), EN("ENGELSK") }
+
+enum class AudioLang(val label: String) { DEFAULT("STANDARD"), NO("NORSK"), EN("ENGELSK") }
+
 data class City(val name: String, val lat: Double, val lon: Double)
 
 val cities = listOf(
@@ -45,6 +49,10 @@ class Prefs(context: Context) {
     private set
   var player by mutableStateOf(Player.entries[sp.getInt("player2", 0).coerceIn(0, 2)])
     private set
+  var subLang by mutableStateOf(SubLang.entries[sp.getInt("subLang", 0).coerceIn(0, 2)])
+    private set
+  var audioLang by mutableStateOf(AudioLang.entries[sp.getInt("audioLang", 0).coerceIn(0, 2)])
+    private set
   var favorites by mutableStateOf(sp.getStringSet("favorites", null)?.toSet())
     private set
 
@@ -75,6 +83,9 @@ class Prefs(context: Context) {
   fun updateAccent(i: Int) { accentIndex = i; sp.edit().putInt("accent", i).apply() }
   fun updateCity(i: Int) { cityIndex = i; sp.edit().putInt("city", i).apply() }
   fun updatePlayer(v: Player) { player = v; sp.edit().putInt("player2", v.ordinal).apply() }
+
+  fun updateSubLang(v: SubLang) { subLang = v; sp.edit().putInt("subLang", v.ordinal).apply() }
+  fun updateAudioLang(v: AudioLang) { audioLang = v; sp.edit().putInt("audioLang", v.ordinal).apply() }
 
   /** Favourite app packages; null until the user changes them (then the first apps are used). */
   fun updateFavorites(v: Set<String>) { favorites = v; sp.edit().putStringSet("favorites", v).apply() }

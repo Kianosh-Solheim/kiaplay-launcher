@@ -36,6 +36,51 @@ data class MediaItem(
     get() = runTimeMinutes?.let { ((it * (100f - playedPercent)) / 100f).toInt().coerceAtLeast(1) }
 }
 
+/** An audio or subtitle stream as Jellyfin describes it. */
+data class JStream(
+  val index: Int,
+  val type: String,
+  val language: String?,
+  val title: String?,
+  val codec: String?,
+  val channels: Int?,
+  val external: Boolean,
+  val isDefault: Boolean,
+  val forced: Boolean,
+  val isText: Boolean,
+) {
+  val label: String
+    get() {
+      val lang = languageName(language)
+      val extra = mutableListOf<String>()
+      title?.takeIf { it.isNotBlank() && !it.equals(lang, true) }?.let { extra += it }
+      if (type == "Audio") {
+        channels?.let { extra += when (it) { 1 -> "MONO"; 2 -> "STEREO"; 6 -> "5.1"; 8 -> "7.1"; else -> "${it}K" } }
+      }
+      if (forced) extra += "TVUNGEN"
+      if (isDefault) extra += "STANDARD"
+      return (listOf(lang) + extra).joinToString(" · ").uppercase()
+    }
+}
+
+fun languageName(code: String?): String = when (code?.lowercase()) {
+  "nor", "nob", "nno", "no", "nb", "nn" -> "Norsk"
+  "eng", "en" -> "Engelsk"
+  "swe", "sv" -> "Svensk"
+  "dan", "da" -> "Dansk"
+  "ger", "deu", "de" -> "Tysk"
+  "fre", "fra", "fr" -> "Fransk"
+  "spa", "es" -> "Spansk"
+  "ita", "it" -> "Italiensk"
+  "jpn", "ja" -> "Japansk"
+  "fin", "fi" -> "Finsk"
+  null, "", "und" -> "Ukjent språk"
+  else -> code?.uppercase() ?: "Ukjent språk"
+}
+
+fun isNorwegian(code: String?) = code?.lowercase() in setOf("nor", "nob", "nno", "no", "nb", "nn")
+fun isEnglish(code: String?) = code?.lowercase() in setOf("eng", "en")
+
 /** Minimal Jellyfin client: login, resume list, library listings, episodes and favourites. */
 class Jellyfin(private val prefs: Prefs) {
   private val version = "0.1"
@@ -192,11 +237,39 @@ class Jellyfin(private val prefs: Prefs) {
     "${prefs.server}/${if (item.type == "Audio") "Audio" else "Videos"}/${item.id}/stream?static=true&MediaSourceId=${item.id}&api_key=${prefs.token}"
 
   /** HLS stream the server transcodes to H.264/AAC, used when the file can't be played directly. */
-  fun transcodeUrl(item: MediaItem, playSessionId: String): String =
+  fun transcodeUrl(item: MediaItem, playSessionId: String, audioIndex: Int? = null): String =
     "${prefs.server}/Videos/${item.id}/master.m3u8?MediaSourceId=${item.id}&PlaySessionId=$playSessionId" +
+      (audioIndex?.let { "&AudioStreamIndex=$it" } ?: "") +
       "&DeviceId=${enc(prefs.deviceId)}&VideoCodec=h264&AudioCodec=aac,ac3,eac3&MaxAudioChannels=6" +
       "&TranscodingMaxAudioChannels=6&SegmentContainer=ts&MinSegments=1&BreakOnNonKeyFrames=True" +
       "&VideoBitrate=20000000&AudioBitrate=384000&api_key=${prefs.token}"
+
+  /** Audio and subtitle streams of the item's first media source. */
+  suspend fun streams(item: MediaItem): List<JStream> = withContext(Dispatchers.IO) {
+    val o = JSONObject(request("/Items/${enc(item.id)}?userId=${enc(prefs.userId)}&Fields=MediaSources,MediaStreams"))
+    val source = o.optJSONArray("MediaSources")?.optJSONObject(0)
+    val arr = source?.optJSONArray("MediaStreams") ?: o.optJSONArray("MediaStreams") ?: return@withContext emptyList()
+    (0 until arr.length()).mapNotNull { i ->
+      val st = arr.getJSONObject(i)
+      val type = st.optString("Type")
+      if (type != "Audio" && type != "Subtitle") return@mapNotNull null
+      JStream(
+        index = st.optInt("Index"),
+        type = type,
+        language = st.optString("Language").ifBlank { null },
+        title = st.optString("Title").ifBlank { null },
+        codec = st.optString("Codec").ifBlank { null },
+        channels = if (st.has("Channels")) st.optInt("Channels") else null,
+        external = st.optBoolean("IsExternal", false),
+        isDefault = st.optBoolean("IsDefault", false),
+        forced = st.optBoolean("IsForced", false),
+        isText = st.optBoolean("IsTextSubtitleStream", type == "Subtitle"),
+      )
+    }
+  }
+
+  fun subtitleUrl(item: MediaItem, stream: JStream): String =
+    "${prefs.server}/Videos/${item.id}/${item.id}/Subtitles/${stream.index}/0/Stream.vtt?api_key=${prefs.token}"
 
   suspend fun tracks(albumId: String): List<MediaItem> = withContext(Dispatchers.IO) {
     items(

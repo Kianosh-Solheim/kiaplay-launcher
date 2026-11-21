@@ -30,7 +30,9 @@ A retro, 80s-style home screen for **Chromecast with Google TV**. Black backgrou
 
 Kiaplay has its own player. It plays straight from Jellyfin, resumes where you left off, and reports progress back, so "keep watching" and watched status stay right in Jellyfin and its other apps. Files the TV can't decode are transcoded by the server automatically. Series play on into the next episode, and albums play as a queue.
 
-Remote: **OK** pause/play, **◀ / ▶** back 10 s / forward 30 s, **▲ / ▼** show the progress bar, **Back** stop.
+Remote: **OK** pause/play, **◀ / ▶** back 10 s / forward 30 s, **▼** audio track and subtitles, **▲** show the progress bar, **Back** stop.
+
+Subtitles: text subtitles (SRT, ASS, embedded or external) are fetched from Jellyfin as WebVTT and work in direct play and transcoding. Picture subtitles (PGS, DVD) work in direct play. Preferred audio and subtitle language are set in the settings.
 
 In the settings you can choose an external player (VLC etc.) or the Jellyfin app instead.
 

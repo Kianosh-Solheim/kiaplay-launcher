@@ -1,5 +1,7 @@
 package no.kianosh.kiaplay
 
+import android.graphics.Color as AColor
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,12 +42,19 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.res.ResourcesCompat
+import androidx.media3.common.C
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -62,9 +72,13 @@ private fun clockText(ms: Long): String {
   return if (h > 0) String.format("%d:%02d:%02d", h, m, sec) else String.format("%d:%02d", m, sec)
 }
 
+private const val SUB_PREFIX = "kp-sub-"
+private val imageSubMimes = setOf(MimeTypes.APPLICATION_PGS, MimeTypes.APPLICATION_VOBSUB, MimeTypes.APPLICATION_DVBSUBS)
+
 /**
  * Kiaplay's own player. Plays straight from Jellyfin (or a transcoded stream when the file
- * can't be played directly), resumes where you left off, and reports progress back to Jellyfin.
+ * can't be played directly), resumes where you left off, reports progress back to Jellyfin,
+ * and lets you pick audio track and subtitles.
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -88,21 +102,133 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
   var barTick by remember { mutableIntStateOf(0) }
   var barVisible by remember { mutableStateOf(true) }
   var error by remember { mutableStateOf<String?>(null) }
+  var menuOpen by remember { mutableStateOf(false) }
+
+  // Streams as Jellyfin lists them, and what is chosen (null subtitle = off).
+  var streams by remember { mutableStateOf<List<JStream>>(emptyList()) }
+  var audioPick by remember { mutableStateOf<JStream?>(null) }
+  var subPick by remember { mutableStateOf<JStream?>(null) }
+  var tracksApplied by remember { mutableStateOf(false) }
+  var transcodeAudio by remember { mutableStateOf<Int?>(null) }
+
   val item = request.queue[index]
   val isAudio = item.type == "Audio"
+  val audioStreams = streams.filter { it.type == "Audio" }
+  val subStreams = streams.filter { it.type == "Subtitle" }
 
   fun showOsd(text: String) { osd = text; osdTick++ }
   fun showBar() { barVisible = true; barTick++ }
 
-  fun start(i: Int, startMs: Long, transcode: Boolean) {
+  fun startWith(i: Int, startMs: Long, transcode: Boolean, list: List<JStream>) {
     val it = request.queue[i]
-    val url = if (transcode && it.type != "Audio") state.jellyfin.transcodeUrl(it, sessionId) else state.jellyfin.streamUrl(it)
+    val url = if (transcode && it.type != "Audio") {
+      state.jellyfin.transcodeUrl(it, sessionId, transcodeAudio)
+    } else {
+      state.jellyfin.streamUrl(it)
+    }
     transcoding = transcode
     error = null
-    exo.setMediaItem(androidx.media3.common.MediaItem.fromUri(url), startMs)
+    // Text subtitles come from Jellyfin as WebVTT, so they work in direct play and transcoding alike.
+    val subs = list.filter { s -> s.type == "Subtitle" && s.isText }.map { s ->
+      androidx.media3.common.MediaItem.SubtitleConfiguration.Builder(Uri.parse(state.jellyfin.subtitleUrl(it, s)))
+        .setId("$SUB_PREFIX${s.index}")
+        .setMimeType(MimeTypes.TEXT_VTT)
+        .setLanguage(s.language)
+        .setLabel(s.label)
+        .build()
+    }
+    val media = androidx.media3.common.MediaItem.Builder()
+      .setUri(url)
+      .setSubtitleConfigurations(subs)
+      .build()
+    exo.setMediaItem(media, startMs)
     exo.prepare()
     exo.playWhenReady = true
     scope.launch { runCatching { state.jellyfin.reportStart(it, startMs, sessionId, transcode) } }
+  }
+
+  fun start(i: Int, startMs: Long, transcode: Boolean) {
+    val it = request.queue[i]
+    if (it.type == "Audio") {
+      streams = emptyList()
+      startWith(i, startMs, transcode, emptyList())
+      return
+    }
+    scope.launch {
+      val list = runCatching { state.jellyfin.streams(it) }.getOrDefault(emptyList())
+      if (!transcode) {
+        streams = list
+        tracksApplied = false
+        transcodeAudio = null
+      }
+      startWith(i, startMs, transcode, list)
+    }
+  }
+
+  fun groupsOf(type: Int): List<Tracks.Group> = exo.currentTracks.groups.filter { it.type == type }
+
+  fun selectAudio(s: JStream) {
+    audioPick = s
+    if (transcoding) {
+      // The server sends only one audio track when transcoding, so ask it for the other one.
+      transcodeAudio = s.index
+      startWith(index, exo.currentPosition, true, streams)
+      return
+    }
+    val ordinal = audioStreams.indexOf(s)
+    val group = groupsOf(C.TRACK_TYPE_AUDIO).getOrNull(ordinal) ?: return
+    exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+      .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+      .build()
+  }
+
+  fun selectSub(s: JStream?) {
+    subPick = s
+    val builder = exo.trackSelectionParameters.buildUpon()
+    if (s == null) {
+      exo.trackSelectionParameters = builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+      return
+    }
+    val texts = groupsOf(C.TRACK_TYPE_TEXT)
+    val group = if (s.isText) {
+      texts.firstOrNull { g -> g.getTrackFormat(0).id == "$SUB_PREFIX${s.index}" }
+    } else {
+      // Picture subtitles (PGS/DVD) only exist inside the file, in the same order Jellyfin lists them.
+      val ordinal = subStreams.filter { !it.isText }.indexOf(s)
+      texts.filter { g ->
+        val f = g.getTrackFormat(0)
+        // Media3 may have converted the track to cues already; the original type is then in codecs.
+        f.id?.startsWith(SUB_PREFIX) != true && (f.sampleMimeType in imageSubMimes || f.codecs in imageSubMimes)
+      }.getOrNull(ordinal)
+    }
+    if (group == null) {
+      showOsd("UNDERTEKST IKKE TILGJENGELIG")
+      return
+    }
+    exo.trackSelectionParameters = builder
+      .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+      .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+      .build()
+  }
+
+  /** First time tracks are known: apply the language choices from the settings. */
+  fun applyDefaults() {
+    if (tracksApplied || streams.isEmpty()) return
+    tracksApplied = true
+    val audio = when (prefs.audioLang) {
+      AudioLang.NO -> audioStreams.firstOrNull { isNorwegian(it.language) }
+      AudioLang.EN -> audioStreams.firstOrNull { isEnglish(it.language) }
+      AudioLang.DEFAULT -> null
+    } ?: audioStreams.firstOrNull { it.isDefault } ?: audioStreams.firstOrNull()
+    if (audio != null) {
+      if (audioStreams.indexOf(audio) > 0 && !transcoding) selectAudio(audio) else audioPick = audio
+    }
+    val sub = when (prefs.subLang) {
+      SubLang.OFF -> subStreams.firstOrNull { it.forced }
+      SubLang.NO -> subStreams.firstOrNull { isNorwegian(it.language) && !it.forced } ?: subStreams.firstOrNull { it.forced }
+      SubLang.EN -> subStreams.firstOrNull { isEnglish(it.language) && !it.forced } ?: subStreams.firstOrNull { it.forced }
+    }
+    selectSub(sub)
   }
 
   fun stopReport(i: Int, pos: Long) {
@@ -116,6 +242,8 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
     if (i !in request.queue.indices) return
     stopReport(index, exo.currentPosition)
     index = i
+    audioPick = null
+    subPick = null
     start(i, 0L, false)
     showBar()
   }
@@ -129,6 +257,10 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
         } else {
           error = "KAN IKKE SPILLE AV DENNE FILEN"
         }
+      }
+
+      override fun onTracksChanged(tracks: Tracks) {
+        if (!tracks.isEmpty) applyDefaults()
       }
 
       override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
@@ -152,7 +284,6 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
   }
 
   LaunchedEffect(Unit) {
-    runCatching { focus.requestFocus() }
     var n = 0
     while (true) {
       positionMs = exo.currentPosition
@@ -165,17 +296,20 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
       }
     }
   }
+  LaunchedEffect(menuOpen) { if (!menuOpen) runCatching { focus.requestFocus() } }
   LaunchedEffect(osdTick) { if (osdTick > 0) { delay(2500); if (playing) osd = "" } }
-  LaunchedEffect(barTick, playing) { if (playing) { delay(4000); barVisible = false } else barVisible = true }
+  LaunchedEffect(barTick, playing, menuOpen) {
+    if (playing && !menuOpen) { delay(4000); barVisible = false } else barVisible = true
+  }
 
-  BackHandler { onExit() }
+  BackHandler { if (menuOpen) menuOpen = false else onExit() }
 
   Box(
     Modifier
       .fillMaxSize()
       .background(Color.Black)
       .onPreviewKeyEvent { e ->
-        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        if (menuOpen || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
         when (e.key) {
           Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar, Key.MediaPlayPause -> {
             if (exo.isPlaying) { exo.pause(); showOsd("▮▮ PAUSE") } else { exo.play(); showOsd("▶ PLAY") }
@@ -191,7 +325,11 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
           }
           Key.MediaNext -> { skipTo(index + 1); true }
           Key.MediaPrevious -> { if (exo.currentPosition > 5_000L) exo.seekTo(0L) else skipTo(index - 1); true }
-          Key.DirectionUp, Key.DirectionDown -> { showBar(); true }
+          Key.DirectionDown, Key.Menu -> {
+            if (!isAudio && streams.isNotEmpty()) menuOpen = true else showBar()
+            true
+          }
+          Key.DirectionUp -> { showBar(); true }
           else -> false
         }
       }
@@ -206,6 +344,20 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
             isFocusable = false
             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
             player = exo
+            subtitleView?.apply {
+              setApplyEmbeddedStyles(false)
+              setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 1.25f)
+              setStyle(
+                CaptionStyleCompat(
+                  AColor.parseColor("#EFE4CC"),
+                  AColor.TRANSPARENT,
+                  AColor.TRANSPARENT,
+                  CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                  AColor.BLACK,
+                  ResourcesCompat.getFont(ctx, R.font.vt323),
+                ),
+              )
+            }
           }
         },
         modifier = Modifier.fillMaxSize(),
@@ -230,7 +382,7 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
           Txt(it, Kp.vt(36.sp, prefs.accent, 2.sp), Modifier.align(Alignment.Center))
         }
 
-        if (barVisible || isAudio) {
+        if ((barVisible || isAudio) && !menuOpen) {
           Column(
             Modifier
               .align(Alignment.BottomStart)
@@ -241,14 +393,14 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
           ) {
             if (!isAudio) {
               val sub = listOfNotNull(
-                item.seriesName?.let { "S${item.season ?: 1} E${item.episode ?: 1}" },
+                item.seriesName?.let { "S${item.season ?: 1} E${item.episode ?: 1} · ${item.name.uppercase()}" },
                 item.year?.toString(),
+                audioPick?.let { "LYD: ${languageName(it.language).uppercase()}" },
+                "TEKST: " + (subPick?.let { languageName(it.language).uppercase() } ?: "AV"),
                 if (transcoding) "OMKODES AV SERVEREN" else null,
               ).joinToString(" · ")
               Txt((item.seriesName ?: item.name).uppercase(), Kp.anton(40.sp, Kp.Cream, 1.sp), maxLines = 1)
-              if (sub.isNotBlank() || item.seriesName != null) {
-                Txt(listOfNotNull(item.seriesName?.let { item.name.uppercase() }, sub.ifBlank { null }).joinToString(" · "), Kp.vt(24.sp, Kp.Muted))
-              }
+              Txt(sub, Kp.vt(24.sp, Kp.Muted), maxLines = 1)
             }
             val fraction = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
             Box(Modifier.fillMaxWidth().height(6.dp).background(Kp.Border)) {
@@ -262,13 +414,90 @@ fun PlayerScreen(state: AppState, request: PlayRequest, onExit: () -> Unit) {
               }
               Spacer(Modifier.weight(1f))
               Txt(
-                if (isAudio) "OK PAUSE   ◀ −10 S   ▶ +30 S   ⏭ NESTE   ◀ TILBAKE STOPP" else "OK PAUSE   ◀ −10 S   ▶ +30 S   ◀ TILBAKE STOPP",
+                if (isAudio) "OK PAUSE   ◀ −10 S   ▶ +30 S   ⏭ NESTE   ◀ TILBAKE STOPP"
+                else "OK PAUSE   ◀ −10 S   ▶ +30 S   ▼ SPRÅK OG TEKST   ◀ TILBAKE STOPP",
                 Kp.vt(20.sp, Kp.Muted, 2.sp),
               )
             }
           }
         }
+
+        if (menuOpen) {
+          TrackMenu(
+            accent = prefs.accent,
+            audio = audioStreams,
+            subs = subStreams,
+            audioPick = audioPick,
+            subPick = subPick,
+            canPictureSubs = !transcoding,
+            onAudio = { selectAudio(it); showOsd("LYD: ${languageName(it.language).uppercase()}") },
+            onSub = { selectSub(it); showOsd("TEKST: " + (it?.let { s -> languageName(s.language).uppercase() } ?: "AV")) },
+            onClose = { menuOpen = false },
+          )
+        }
       }
+    }
+  }
+}
+
+/** Right-hand panel listing audio tracks and subtitles. */
+@Composable
+private fun TrackMenu(
+  accent: Color,
+  audio: List<JStream>,
+  subs: List<JStream>,
+  audioPick: JStream?,
+  subPick: JStream?,
+  canPictureSubs: Boolean,
+  onAudio: (JStream) -> Unit,
+  onSub: (JStream?) -> Unit,
+  onClose: () -> Unit,
+) {
+  val first = remember { FocusRequester() }
+  LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+  Row(Modifier.fillMaxSize()) {
+    Spacer(Modifier.weight(1f))
+    Column(
+      Modifier
+        .width(520.dp)
+        .fillMaxHeight()
+        .background(accent)
+        .padding(start = 4.dp)
+        .background(Color(0xF00A0808))
+        .padding(36.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      Txt("SPRÅK OG TEKST", Kp.anton(32.sp, Kp.Cream, 2.sp))
+      Txt("LYDSPOR", Kp.vt(22.sp, Kp.Mustard, 3.sp))
+      audio.forEachIndexed { i, s ->
+        TrackRow(s.label, s == audioPick, accent, if (i == 0) Modifier.focusRequester(first) else Modifier) { onAudio(s) }
+      }
+      Txt("UNDERTEKSTER", Kp.vt(22.sp, Kp.Mustard, 3.sp), Modifier.padding(top = 8.dp))
+      TrackRow("AV", subPick == null, accent, if (audio.isEmpty()) Modifier.focusRequester(first) else Modifier) { onSub(null) }
+      for (s in subs) {
+        if (!s.isText && !canPictureSubs) continue
+        TrackRow(s.label, s == subPick, accent) { onSub(s) }
+      }
+      Spacer(Modifier.weight(1f))
+      KpButton("◀ LUKK", accent, onClose, height = 44.dp)
+    }
+  }
+}
+
+@Composable
+private fun TrackRow(label: String, selected: Boolean, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+  Focusable(onClick, modifier) { focused ->
+    Row(
+      Modifier
+        .fillMaxWidth()
+        .height(44.dp)
+        .focusRing(focused, accent)
+        .background(if (focused) Kp.Surface else Color.Transparent)
+        .padding(horizontal = 14.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Txt(if (selected) "●" else "○", Kp.vt(24.sp, if (selected) accent else Kp.Muted), Modifier.width(30.dp))
+      Txt(label, Kp.vt(24.sp), Modifier.weight(1f), maxLines = 1)
     }
   }
 }
