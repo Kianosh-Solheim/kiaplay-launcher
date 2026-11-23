@@ -34,6 +34,7 @@ import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.sin
+import kotlin.math.tanh
 import kotlin.random.Random
 
 private const val INTRO_SECONDS = 6.2f
@@ -113,7 +114,7 @@ fun IntroScreen(prefs: Prefs, onDone: () -> Unit) {
   }
 }
 
-/** Synthesises the intro sound (thoom, hum, swoosh, warm chord, bell) at runtime. */
+/** Synthesises the intro sound (deep boom, hum, swoosh, warm chord, bell) at runtime. */
 object IntroSound {
   private var track: AudioTrack? = null
 
@@ -142,16 +143,51 @@ object IntroSound {
     val chord = floatArrayOf(130.81f, 196f, 261.63f, 329.63f, 392f)
     val phases = FloatArray(chord.size)
     var chordLp = 0f
-    var thoomPhase = 0f
+    var boomPhase = 0f
+    var subPhase = 0f
+    var boom2Phase = 0f
+    var punchLp = 0f
+    val combs = listOf(0.0297f, 0.0371f, 0.0411f, 0.0437f).map { FloatArray((it * rate).toInt()) }
+    val combPos = IntArray(combs.size)
+    val combLp = FloatArray(combs.size)
     for (i in 0 until n) {
       val s = i / rate.toFloat()
       var v = 0f
 
-      // Thoom: falling sine as the square appears.
+      // Oomph: a deep, heavy boom as the square appears, plus a smaller hit when the frame opens.
       val tf = s * speed
-      val thoomFreq = if (tf < 0.3f) 110f else 110f * exp(-0.8f * (tf - 0.3f)).coerceAtLeast(0.38f)
-      thoomPhase += (2f * PI.toFloat() * thoomFreq / rate)
-      v += sin(thoomPhase) * 0.8f * env(s, at(0.3f), at(0.05f), at(1.5f))
+      var boom = 0f
+      if (tf >= 0.3f) {
+        val f1 = (95f * exp(-0.86f * (tf - 0.3f))).coerceAtLeast(24f)
+        boomPhase += 2f * PI.toFloat() * f1 / rate
+        boom += sin(boomPhase) * 1.0f * env(s, at(0.3f), at(0.01f), at(2.8f))
+        val f2 = (48f * exp(-0.42f * (tf - 0.3f))).coerceAtLeast(20f)
+        subPhase += 2f * PI.toFloat() * f2 / rate
+        boom += sin(subPhase) * 0.9f * env(s, at(0.3f), at(0.02f), at(3.3f))
+        val punchEnv = env(s, at(0.3f), at(0.003f), at(0.45f))
+        if (punchEnv > 0f) {
+          punchLp += 0.07f * ((Random.nextFloat() * 2f - 1f) - punchLp)
+          boom += punchLp * 4f * punchEnv
+        }
+      }
+      if (tf >= 2.4f) {
+        val f3 = (70f * exp(-0.94f * (tf - 2.4f))).coerceAtLeast(30f)
+        boom2Phase += 2f * PI.toFloat() * f3 / rate
+        boom += sin(boom2Phase) * 0.55f * env(s, at(2.4f), at(0.01f), at(3.6f))
+      }
+      // Saturate so the boom is felt on small TV speakers too, then add a dark hall tail.
+      boom = tanh(2.6f * boom) / tanh(2.6f)
+      var wet = 0f
+      for (k in combs.indices) {
+        val buf = combs[k]
+        val pos = combPos[k]
+        val delayed = buf[pos]
+        combLp[k] += 0.25f * (delayed - combLp[k])
+        buf[pos] = boom + combLp[k] * 0.84f
+        combPos[k] = (pos + 1) % buf.size
+        wet += delayed
+      }
+      v += boom * 0.95f + wet * 0.16f
 
       // Low CRT hum.
       val saw = ((s * 50f) % 1f) * 2f - 1f
