@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,6 +48,9 @@ object Kp {
     TextStyle(fontFamily = Vt, fontSize = size, color = color, letterSpacing = spacing)
 }
 
+/** How much the 1280×720 design surface is scaled to reach the real screen (e.g. 0.75 on 1080p). */
+val LocalDesignScale = staticCompositionLocalOf { 1f }
+
 /**
  * Lays the UI out on a fixed 1280×720 design surface (the same size as the design canvas)
  * and scales it to whatever the TV reports, so every number in the design maps 1:1.
@@ -61,6 +66,6 @@ fun DesignSurface(content: @Composable () -> Unit) {
           scaleX = scale
           scaleY = scale
         },
-    ) { content() }
+    ) { CompositionLocalProvider(LocalDesignScale provides scale) { content() } }
   }
 }

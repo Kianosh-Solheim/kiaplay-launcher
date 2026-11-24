@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import kotlinx.coroutines.delay
 import kotlin.random.Random
 
@@ -48,24 +49,34 @@ fun CrtOverlay(scanlines: Boolean, crt: Boolean) {
     }
   }
   val grainBrush = remember { ShaderBrush(ImageShader(noiseBitmap, TileMode.Repeated, TileMode.Repeated)) }
+  // The UI is drawn at 1280×720 and scaled to the screen, so measure in real screen pixels;
+  // otherwise 1-pixel lines end up thinner than a pixel and blur into an even grey.
+  val designScale = LocalDesignScale.current
   Canvas(Modifier.fillMaxSize()) {
+    val screenPx = 1f / designScale.coerceAtLeast(0.1f)
     if (crt) {
-      translate(-grainShift.x, -grainShift.y) {
-        drawRect(
-          brush = grainBrush,
-          topLeft = Offset.Zero,
-          size = Size(size.width + 192f, size.height + 192f),
-          alpha = 0.22f,
-          blendMode = BlendMode.Overlay,
-        )
+      val grainSize = 2f * screenPx
+      withTransform({ scale(grainSize, grainSize, pivot = Offset.Zero) }) {
+        translate(-grainShift.x, -grainShift.y) {
+          drawRect(
+            brush = grainBrush,
+            topLeft = Offset.Zero,
+            size = Size(size.width / grainSize + 192f, size.height / grainSize + 192f),
+            alpha = 0.3f,
+            blendMode = BlendMode.Overlay,
+          )
+        }
       }
     }
     if (scanlines) {
-      val line = Color.Black.copy(alpha = 0.32f)
+      // A dark line two screen pixels tall every four pixels: about 270 lines on a 1080p TV.
+      val line = Color.Black.copy(alpha = 0.38f)
+      val h = 2f * screenPx
+      val step = 4f * screenPx
       var y = 0f
       while (y < size.height) {
-        drawRect(line, topLeft = Offset(0f, y), size = Size(size.width, 1f))
-        y += 3f
+        drawRect(line, topLeft = Offset(0f, y), size = Size(size.width, h))
+        y += step
       }
     }
     drawRect(
